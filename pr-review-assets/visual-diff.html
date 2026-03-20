@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PR #16365 — Visual Bug Diff</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 32px; }
+
+  h1 { font-size: 22px; margin-bottom: 8px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 32px; }
+
+  .bug-section { margin-bottom: 48px; }
+  .bug-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .bug-header h2 { font-size: 18px; }
+  .severity { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; color: #fff; }
+  .severity.critical { background: #d32f2f; }
+  .severity.high { background: #e65100; }
+  .severity.medium { background: #f9a825; color: #333; }
+
+  .diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 16px; }
+  .diff-panel { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .diff-label { padding: 10px 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .diff-label.bug { background: #fce4ec; color: #c62828; }
+  .diff-label.fix { background: #e8f5e9; color: #2e7d32; }
+  .diff-label .icon { font-size: 16px; }
+  .diff-body { padding: 20px; }
+
+  .code-block { background: #1e1e2e; color: #cdd6f4; padding: 16px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12.5px; line-height: 1.7; overflow-x: auto; margin-bottom: 12px; white-space: pre; }
+  .code-block .line-num { color: #585b70; user-select: none; margin-right: 16px; }
+  .code-block .highlight-bad { background: rgba(243, 67, 67, 0.2); display: inline; padding: 1px 4px; border-radius: 3px; }
+  .code-block .highlight-good { background: rgba(64, 196, 99, 0.2); display: inline; padding: 1px 4px; border-radius: 3px; }
+  .code-block .comment { color: #6c7086; }
+  .code-block .string { color: #a6e3a1; }
+  .code-block .keyword { color: #cba6f7; }
+  .code-block .fn { color: #89b4fa; }
+  .code-block .prop { color: #f9e2af; }
+  .code-block .arrow { color: #89dceb; }
+
+  /* === Simulated component renders === */
+  .render-preview { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+  .render-label { background: #fafafa; padding: 6px 12px; font-size: 11px; color: #999; border-bottom: 1px solid #e0e0e0; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Bug 1: Glossary browser term items */
+  .glossary-list { padding: 0; }
+  .glossary-item { display: flex; align-items: center; padding: 16px 18px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 14px; transition: background 0.15s; }
+  .glossary-item .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
+  .glossary-item .dot.group { background: #f0ad4e; }
+  .glossary-item .dot.term { background: #5b8ff9; }
+  .glossary-item .name { flex: 1; }
+  .glossary-item .type-badge { font-size: 11px; color: #999; }
+
+  /* Bug state: selected item with broken CSS */
+  .glossary-item.selected-broken {
+    /* Simulating what happens when CSS block breaks */
+    /* The }} closes the rule prematurely, so background never applies */
+    background: transparent;
+    /* All subsequent styles in the block are also lost */
+  }
+  .glossary-item.selected-broken .name {
+    /* nameStyles renders as plain text function string */
+    font-weight: 400;
+    color: #333; /* falls back to inherited, not the theme color */
+  }
+
+  .glossary-item.selected-fixed {
+    background: #f0eeff;
+  }
+  .glossary-item.selected-fixed .name {
+    color: #7b61ff;
+    font-weight: 700;
+  }
+
+  .glossary-item.hover-broken:hover {
+    background: #f5f5f5;
+  }
+  .glossary-item.hover-broken:hover .name {
+    /* Theme function not called — color stays as inherited */
+    color: #333;
+  }
+
+  .glossary-item.hover-fixed:hover {
+    background: #f5f5f5;
+  }
+  .glossary-item.hover-fixed:hover .name {
+    color: #7b61ff;
+  }
+
+  /* Bug 2: CSS output comparison */
+  .css-output { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; padding: 12px 16px; border-radius: 6px; margin: 8px 0; line-height: 1.6; }
+  .css-output.broken { background: #fff5f5; border: 1px solid #ffcdd2; color: #b71c1c; }
+  .css-output.fixed { background: #f1f8e9; border: 1px solid #c8e6c9; color: #1b5e20; }
+  .css-output .invalid { text-decoration: wavy underline; text-decoration-color: #d32f2f; text-underline-offset: 3px; }
+
+  /* Annotation callouts */
+  .callout { display: flex; gap: 8px; padding: 10px 14px; border-radius: 6px; font-size: 13px; line-height: 1.5; margin-top: 12px; }
+  .callout.error { background: #fce4ec; color: #b71c1c; }
+  .callout.success { background: #e8f5e9; color: #1b5e20; }
+  .callout .callout-icon { flex-shrink: 0; font-size: 16px; }
+
+  /* Bug 3: nameStyles function rendering */
+  .func-render { font-family: 'SF Mono', monospace; font-size: 12px; padding: 2px 6px; background: #fff3e0; border: 1px solid #ffe0b2; border-radius: 3px; color: #e65100; word-break: break-all; }
+
+  /* Comparison arrow */
+  .arrow-divider { display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 28px; padding: 0 8px; }
+</style>
+</head>
+<body>
+
+<h1>PR #16365 — Visual Bug Diff</h1>
+<p class="subtitle">What the bugs actually look like in the browser vs. the intended behavior</p>
+
+<!-- ============ BUG 1: Double }} ============ -->
+<div class="bug-section">
+  <div class="bug-header">
+    <span class="severity critical">Critical</span>
+    <h2>Bug 1: Double <code>}}</code> Breaks Selected Term Styling</h2>
+  </div>
+
+  <div class="diff-container">
+    <div class="diff-panel">
+      <div class="diff-label bug"><span class="icon">&#10060;</span> Current (Merged Code)</div>
+      <div class="diff-body">
+        <div class="code-block"><span class="line-num">15</span><span class="prop">background-color</span>: <span class="keyword">${</span>(<span class="fn">props</span>) <span class="arrow">=&gt;</span> props.$isSelected &amp;&amp; props.theme.colors.bgActive<span class="keyword">}</span><span class="highlight-bad">}</span>;
+<span class="line-num">  </span><span class="comment">// JS interpolation closes here ─────────────────────────┘</span>
+<span class="line-num">  </span><span class="comment">// This } is a literal character in the CSS string ───────^</span></div>
+
+        <p style="font-size:13px; margin: 12px 0 8px; font-weight:600;">Generated CSS:</p>
+        <div class="css-output broken">background-color: <span class="invalid">#7b61ff}</span>;</div>
+
+        <div class="callout error">
+          <span class="callout-icon">&#9888;</span>
+          <span>The stray <code>}</code> makes the CSS value invalid. The browser discards the entire declaration — selected terms get <strong>no background highlight</strong>.</span>
+        </div>
+
+        <p style="font-size:13px; margin: 16px 0 8px; font-weight:600;">Rendered result:</p>
+        <div class="render-preview">
+          <div class="render-label">Glossary Browser — user clicks "PII"</div>
+          <div class="glossary-list">
+            <div class="glossary-item"><span class="dot group"></span><span class="name">Financial Data</span><span class="type-badge">Term Group</span></div>
+            <div class="glossary-item selected-broken" style="outline: 2px dashed #d32f2f; outline-offset: -2px; position: relative;">
+              <span class="dot group"></span><span class="name" style="color: #333; font-weight: 400;">PII</span><span class="type-badge">Term Group</span>
+              <span style="position:absolute; right: 100px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #d32f2f; font-weight: 700;">&#8592; no highlight, no bold</span>
+            </div>
+            <div class="glossary-item" style="padding-left: 42px;"><span class="dot term"></span><span class="name">Email Address</span><span class="type-badge">Term</span></div>
+            <div class="glossary-item" style="padding-left: 42px;"><span class="dot term"></span><span class="name">Phone Number</span><span class="type-badge">Term</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="diff-panel">
+      <div class="diff-label fix"><span class="icon">&#9989;</span> Fixed</div>
+      <div class="diff-body">
+        <div class="code-block"><span class="line-num">15</span><span class="prop">background-color</span>: <span class="keyword">${</span>(<span class="fn">props</span>) <span class="arrow">=&gt;</span> props.$isSelected &amp;&amp; props.theme.colors.bgActive<span class="keyword">}</span>;
+<span class="line-num">  </span><span class="comment">// JS interpolation closes here ─────────────────────────┘</span>
+<span class="line-num">  </span><span class="comment">// Semicolon immediately follows — clean CSS ─────────────^</span></div>
+
+        <p style="font-size:13px; margin: 12px 0 8px; font-weight:600;">Generated CSS:</p>
+        <div class="css-output fixed">background-color: #7b61ff;</div>
+
+        <div class="callout success">
+          <span class="callout-icon">&#10004;</span>
+          <span>Valid CSS value. Selected terms get the intended purple highlight background.</span>
+        </div>
+
+        <p style="font-size:13px; margin: 16px 0 8px; font-weight:600;">Rendered result:</p>
+        <div class="render-preview">
+          <div class="render-label">Glossary Browser — user clicks "PII"</div>
+          <div class="glossary-list">
+            <div class="glossary-item"><span class="dot group"></span><span class="name">Financial Data</span><span class="type-badge">Term Group</span></div>
+            <div class="glossary-item selected-fixed">
+              <span class="dot group"></span><span class="name" style="color: #7b61ff; font-weight: 700;">PII</span><span class="type-badge">Term Group</span>
+            </div>
+            <div class="glossary-item" style="padding-left: 42px;"><span class="dot term"></span><span class="name">Email Address</span><span class="type-badge">Term</span></div>
+            <div class="glossary-item" style="padding-left: 42px;"><span class="dot term"></span><span class="name">Phone Number</span><span class="type-badge">Term</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BUG 2: nameStyles plain string ============ -->
+<div class="bug-section">
+  <div class="bug-header">
+    <span class="severity critical">Critical</span>
+    <h2>Bug 2: Theme Functions Render as Literal Text</h2>
+  </div>
+
+  <div class="diff-container">
+    <div class="diff-panel">
+      <div class="diff-label bug"><span class="icon">&#10060;</span> Current (Merged Code)</div>
+      <div class="diff-body">
+        <div class="code-block"><span class="line-num">29</span><span class="keyword">const</span> nameStyles = <span class="string">`</span>            <span class="comment">// plain template literal!</span>
+<span class="line-num">30</span>    <span class="prop">color</span>: <span class="keyword">${</span>(<span class="fn">props</span>) <span class="arrow">=&gt;</span> props.theme.colors.text<span class="keyword">}</span>;
+<span class="line-num">  </span>    <span class="comment">// ^^ this arrow function is .toString()'d, not called</span>
+<span class="line-num">31</span><span class="string">`</span>;</div>
+
+        <p style="font-size:13px; margin: 12px 0 8px; font-weight:600;">Generated CSS:</p>
+        <div class="css-output broken">color: <span class="invalid">(props) =&gt; props.theme.colors.text</span>;</div>
+
+        <div class="callout error">
+          <span class="callout-icon">&#9888;</span>
+          <span>In a plain <code>`string`</code>, <code>${fn}</code> calls <code>fn.toString()</code>. The CSS value is literally the function source code — the browser ignores it as invalid.</span>
+        </div>
+
+        <p style="font-size:13px; margin: 16px 0 8px; font-weight:600;">Rendered result:</p>
+        <div class="render-preview">
+          <div class="render-label">Term name link — all terms affected</div>
+          <div class="glossary-list">
+            <div class="glossary-item">
+              <span class="dot term"></span>
+              <span class="name" style="color: inherit; font-size: 14px;">Email Address</span>
+              <span style="font-size: 10px; color: #d32f2f; margin-left: 12px;">&#8592; inherits parent color (black/default), not theme</span>
+            </div>
+            <div class="glossary-item" style="background: #f5f5f5;">
+              <span class="dot term"></span>
+              <span class="name" style="color: inherit; font-size: 14px;">Phone Number</span>
+              <span style="font-size: 10px; color: #d32f2f; margin-left: 12px;">&#8592; hover color also broken</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="diff-panel">
+      <div class="diff-label fix"><span class="icon">&#9989;</span> Fixed</div>
+      <div class="diff-body">
+        <div class="code-block"><span class="line-num">29</span><span class="keyword">const</span> nameStyles = <span class="fn">css</span><span class="string">`</span>         <span class="comment">// css tagged template!</span>
+<span class="line-num">30</span>    <span class="prop">color</span>: <span class="keyword">${</span>(<span class="fn">props</span>) <span class="arrow">=&gt;</span> props.theme.colors.text<span class="keyword">}</span>;
+<span class="line-num">  </span>    <span class="comment">// ^^ styled-components calls this with { theme } props</span>
+<span class="line-num">31</span><span class="string">`</span>;</div>
+
+        <p style="font-size:13px; margin: 12px 0 8px; font-weight:600;">Generated CSS:</p>
+        <div class="css-output fixed">color: #2e2e3a;</div>
+
+        <div class="callout success">
+          <span class="callout-icon">&#10004;</span>
+          <span>The <code>css</code> tag from styled-components processes the arrow function, injecting the resolved theme color.</span>
+        </div>
+
+        <p style="font-size:13px; margin: 16px 0 8px; font-weight:600;">Rendered result:</p>
+        <div class="render-preview">
+          <div class="render-label">Term name link — all terms affected</div>
+          <div class="glossary-list">
+            <div class="glossary-item">
+              <span class="dot term"></span>
+              <span class="name" style="color: #2e2e3a; font-size: 14px;">Email Address</span>
+              <span style="font-size: 10px; color: #2e7d32; margin-left: 12px;">&#8592; correct theme text color</span>
+            </div>
+            <div class="glossary-item" style="background: #f5f5f5;">
+              <span class="dot term"></span>
+              <span class="name" style="color: #7b61ff; font-size: 14px;">Phone Number</span>
+              <span style="font-size: 10px; color: #2e7d32; margin-left: 12px;">&#8592; hover shows brand color</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BUG 3: TermLink double }} ============ -->
+<div class="bug-section">
+  <div class="bug-header">
+    <span class="severity critical">Critical</span>
+    <h2>Bug 3: Selected TermLink Color Also Broken by <code>}}</code></h2>
+  </div>
+
+  <div class="diff-container">
+    <div class="diff-panel">
+      <div class="diff-label bug"><span class="icon">&#10060;</span> Current (Merged Code) — Line 58</div>
+      <div class="diff-body">
+        <div class="code-block"><span class="line-num">58</span><span class="keyword">${</span>(<span class="fn">props</span>) <span class="arrow">=&gt;</span> props.$isSelected &amp;&amp;
+<span class="line-num">  </span>  `<span class="prop">color</span>: <span class="keyword">${</span>props.theme.colors.textActive<span class="keyword">}</span><span class="highlight-bad">}</span>; <span class="prop">font-weight</span>: 700;`<span class="keyword">}</span></div>
+
+        <p style="font-size:13px; margin: 12px 0 8px; font-weight:600;">Generated CSS (when selected):</p>
+        <div class="css-output broken">color: <span class="invalid">#7b61ff}</span>; font-weight: 700;</div>
+
+        <div class="callout error">
+          <span class="callout-icon">&#9888;</span>
+          <span>The <code>color</code> value includes a stray <code>}</code>. Browser rejects the color declaration. <code>font-weight: 700</code> may or may not apply depending on how the CSS parser recovers.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="diff-panel">
+      <div class="diff-label fix"><span class="icon">&#9989;</span> Fixed — Remove extra <code>}</code></div>
+      <div class="diff-body">
+        <div class="code-block"><span class="line-num">58</span><span class="keyword">${</span>(<span class="fn">props</span>) <span class="arrow">=&gt;</span> props.$isSelected &amp;&amp;
+<span class="line-num">  </span>  `<span class="prop">color</span>: <span class="keyword">${</span>props.theme.colors.textActive<span class="keyword">}</span>; <span class="prop">font-weight</span>: 700;`<span class="keyword">}</span></div>
+
+        <p style="font-size:13px; margin: 12px 0 8px; font-weight:600;">Generated CSS (when selected):</p>
+        <div class="css-output fixed">color: #7b61ff; font-weight: 700;</div>
+
+        <div class="callout success">
+          <span class="callout-icon">&#10004;</span>
+          <span>Both <code>color</code> and <code>font-weight</code> apply correctly.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Summary ============ -->
+<div class="bug-section" style="margin-top: 48px; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+  <h2 style="margin-bottom: 16px;">How These Bugs Passed Review</h2>
+  <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+    <thead>
+      <tr style="text-align: left; border-bottom: 2px solid #e0e0e0;">
+        <th style="padding: 8px 12px;">Check</th>
+        <th style="padding: 8px 12px;">Would it catch Bug 1 (<code>}}</code>)?</th>
+        <th style="padding: 8px 12px;">Would it catch Bug 2 (<code>nameStyles</code>)?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid #f0f0f0;">
+        <td style="padding: 8px 12px; font-weight: 500;">TypeScript compiler</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">No — valid JS template literal</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">No — valid JS template literal</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #f0f0f0;">
+        <td style="padding: 8px 12px; font-weight: 500;">ESLint / Prettier</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">No — doesn't parse CSS in strings</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">No — can't distinguish <code>css``</code> from <code>``</code></td>
+      </tr>
+      <tr style="border-bottom: 1px solid #f0f0f0;">
+        <td style="padding: 8px 12px; font-weight: 500;">Unit tests (vitest)</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">No — JSDOM doesn't render CSS</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">No — JSDOM doesn't render CSS</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #f0f0f0;">
+        <td style="padding: 8px 12px; font-weight: 500;">Meticulous (visual AI)</td>
+        <td style="padding: 8px 12px; color: #e65100;">Flagged 49 diffs — <strong>approved anyway</strong></td>
+        <td style="padding: 8px 12px; color: #e65100;">Likely included — <strong>approved anyway</strong></td>
+      </tr>
+      <tr style="border-bottom: 1px solid #f0f0f0;">
+        <td style="padding: 8px 12px; font-weight: 500;">Human reviewer</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">Approved — 0 inline comments</td>
+        <td style="padding: 8px 12px; color: #d32f2f;">Approved — 0 inline comments</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 12px; font-weight: 600;">AI code review</td>
+        <td style="padding: 8px 12px; color: #2e7d32; font-weight: 600;">Caught immediately</td>
+        <td style="padding: 8px 12px; color: #2e7d32; font-weight: 600;">Caught immediately</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
