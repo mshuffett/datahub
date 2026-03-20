@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataHub – GlossarySelector PR Preview</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px;
+      background: #f0f2f5;
+      color: #262626;
+      padding: 24px;
+    }
+    h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    p  { color: #595959; font-size: 13px; line-height: 1.6; }
+
+    /* ── Page layout ── */
+    .page-header {
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
+      padding: 12px 24px;
+      margin: -24px -24px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .page-header .logo { font-size: 18px; font-weight: 700; color: #1677ff; }
+    .page-header .breadcrumb { color: #8c8c8c; font-size: 13px; }
+    .page-header .breadcrumb span { color: #262626; }
+
+    .pr-badge {
+      margin-left: auto;
+      background: #e6f4ff;
+      border: 1px solid #91caff;
+      color: #0958d9;
+      border-radius: 4px;
+      font-size: 12px;
+      padding: 2px 8px;
+      font-weight: 500;
+    }
+
+    /* ── Card shell ── */
+    .card {
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 780px;
+      margin: 0 auto 32px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    /* ── Form section ── */
+    .form-section { margin-bottom: 24px; }
+    .form-label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #262626;
+    }
+    .form-label .new-badge {
+      display: inline-block;
+      margin-left: 6px;
+      background: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #389e0d;
+      border-radius: 3px;
+      font-size: 10px;
+      padding: 0 5px;
+      font-weight: 500;
+      vertical-align: middle;
+    }
+    .form-description {
+      font-size: 13px;
+      color: #595959;
+      margin-bottom: 8px;
+      line-height: 1.55;
+    }
+
+    /* ── Ant-Design-style Select ── */
+    .ant-select {
+      position: relative;
+      width: 100%;
+    }
+    .ant-select-selector {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      min-height: 32px;
+      padding: 2px 8px;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      background: #fff;
+      cursor: text;
+      transition: border-color .2s;
+    }
+    .ant-select-selector:focus-within {
+      border-color: #1677ff;
+      box-shadow: 0 0 0 2px rgba(22,119,255,.2);
+      outline: none;
+    }
+    .ant-select-placeholder {
+      color: #bfbfbf;
+      user-select: none;
+      font-size: 13px;
+      padding: 0 4px;
+    }
+    .ant-select-suffix {
+      margin-left: auto;
+      color: #bfbfbf;
+      font-size: 12px;
+      padding-right: 4px;
+    }
+
+    /* ── Tags ── */
+    .ant-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 6px;
+      height: 22px;
+      border-radius: 4px;
+      font-size: 12px;
+      border: 1px solid #d9d9d9;
+      background: #fafafa;
+      color: #262626;
+      white-space: nowrap;
+    }
+    .ant-tag .close-btn {
+      font-size: 10px;
+      color: #8c8c8c;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .ant-tag .close-btn:hover { color: #262626; }
+    .ant-tag.glossary-term { background: #f0f5ff; border-color: #adc6ff; color: #2f54eb; }
+    .ant-tag.glossary-node { background: #fff7e6; border-color: #ffd591; color: #d46b08; }
+    .tag-icon { font-size: 10px; }
+
+    /* ── Dropdown ── */
+    .ant-select-dropdown {
+      position: relative;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.08), 0 3px 6px rgba(0,0,0,.06);
+      margin-top: 4px;
+      overflow: hidden;
+    }
+    .dropdown-item {
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background .15s;
+    }
+    .dropdown-item:hover { background: #f5f5f5; }
+    .dropdown-item .item-icon { font-size: 13px; }
+    .dropdown-item .item-type {
+      margin-left: auto;
+      font-size: 11px;
+      color: #8c8c8c;
+      background: #f5f5f5;
+      border-radius: 3px;
+      padding: 0 5px;
+    }
+
+    /* ── Glossary Browser ── */
+    .glossary-browser {
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.08);
+      background: #fff;
+      margin-top: 4px;
+      max-height: 350px;
+      overflow-y: auto;
+    }
+    .glossary-browser-header {
+      padding: 10px 14px 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #8c8c8c;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .tree-node {
+      padding: 6px 14px 6px calc(14px + var(--depth) * 16px);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background .15s;
+      border-radius: 4px;
+      margin: 1px 4px;
+    }
+    .tree-node:hover { background: #f0f5ff; }
+    .tree-node .caret { font-size: 10px; color: #8c8c8c; width: 10px; }
+    .tree-node .node-icon { font-size: 13px; }
+    .tree-node .node-name { flex: 1; }
+    .tree-node .node-type-badge {
+      font-size: 10px;
+      color: #8c8c8c;
+      background: #f5f5f5;
+      border-radius: 3px;
+      padding: 0 4px;
+    }
+    .tree-node.selected { background: #e6f4ff; }
+    .tree-node.selected .node-name { font-weight: 500; color: #0958d9; }
+
+    /* ── Divider / state labels ── */
+    .state-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: #8c8c8c;
+      margin: 28px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .state-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #f0f0f0;
+    }
+
+    /* ── Highlight box (diff callout) ── */
+    .diff-callout {
+      border-left: 3px solid #1677ff;
+      background: #e6f4ff;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #0958d9;
+    }
+    .diff-callout strong { font-weight: 600; }
+
+    /* ── Other policy form fields (context) ── */
+    .context-field { opacity: .45; pointer-events: none; margin-bottom: 16px; }
+    .context-field .form-label { font-weight: 500; color: #595959; }
+
+    .ant-select-selector.disabled-look {
+      background: #f5f5f5;
+      cursor: not-allowed;
+    }
+
+    input[type=text].ant-input {
+      width: 100%;
+      padding: 5px 10px;
+      border: 1px solid #d9d9d9;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+    input[type=text].ant-input:focus {
+      border-color: #1677ff;
+      box-shadow: 0 0 0 2px rgba(22,119,255,.2);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Page Header -->
+<div class="page-header">
+  <div class="logo">DataHub</div>
+  <div class="breadcrumb">Settings › Access &rsaquo; Policies &rsaquo; <span>Create Policy</span></div>
+  <div class="pr-badge">PR Preview — feat/glossary-based-policies</div>
+</div>
+
+<!-- ================================================================
+     STATE 1 – Empty GlossarySelector (browser visible on focus)
+     ================================================================ -->
+<div class="card" id="state-empty">
+  <div class="card-title">Metadata Policy — Privileges &amp; Resource Filter</div>
+
+  <div class="diff-callout">
+    <strong>New in this PR:</strong> The "Glossary Terms / Term Groups" section below is added by
+    <code>GlossarySelector.tsx</code> and wired into <code>PolicyPrivilegeForm</code>.
+  </div>
+
+  <!-- Context: existing fields (greyed out) -->
+  <div class="form-section context-field">
+    <div class="form-label">Resource Type</div>
+    <div class="ant-select">
+      <div class="ant-select-selector disabled-look">
+        <span style="font-size:13px;color:#595959;padding:0 4px;">Dataset</span>
+        <span class="ant-select-suffix">▾</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section context-field">
+    <div class="form-label">Resource URN (optional)</div>
+    <input type="text" class="ant-input" value="" placeholder="urn:li:dataset:..." />
+  </div>
+
+  <!-- NEW: GlossarySelector — empty / focused (browser open) -->
+  <div class="form-section">
+    <div class="form-label">
+      Glossary Terms / Term Groups
+      <span class="new-badge">NEW</span>
+    </div>
+    <p class="form-description">
+      The policy will apply to resources with the chosen glossary terms or any term under the chosen glossary
+      term groups. If <strong>none</strong> are selected, the policy will not account for glossary terms.
+    </p>
+
+    <div class="state-label">State A — Input focused, no search text → Glossary Browser shown</div>
+
+    <div class="ant-select">
+      <div class="ant-select-selector" style="border-color:#1677ff;box-shadow:0 0 0 2px rgba(22,119,255,.2);">
+        <span class="ant-select-placeholder">Select glossary terms or term groups to apply to specific resources.</span>
+        <span class="ant-select-suffix">🔍</span>
+      </div>
+    </div>
+
+    <!-- Glossary Browser (shown when focused + no search text) -->
+    <div class="glossary-browser">
+      <div class="glossary-browser-header">Browse Glossary</div>
+
+      <!-- Node: Financial Data -->
+      <div class="tree-node" style="--depth:0;">
+        <span class="caret">▶</span>
+        <span class="node-icon">📁</span>
+        <span class="node-name">Financial Data</span>
+        <span class="node-type-badge">Term Group</span>
+      </div>
+      <!-- Node: PII -->
+      <div class="tree-node" style="--depth:0;">
+        <span class="caret">▼</span>
+        <span class="node-icon">📁</span>
+        <span class="node-name">PII</span>
+        <span class="node-type-badge">Term Group</span>
+      </div>
+        <div class="tree-node" style="--depth:1;">
+          <span class="caret"></span>
+          <span class="node-icon">🏷</span>
+          <span class="node-name">Email Address</span>
+          <span class="node-type-badge">Term</span>
+        </div>
+        <div class="tree-node" style="--depth:1;">
+          <span class="caret"></span>
+          <span class="node-icon">🏷</span>
+          <span class="node-name">Phone Number</span>
+          <span class="node-type-badge">Term</span>
+        </div>
+        <div class="tree-node" style="--depth:1;">
+          <span class="caret"></span>
+          <span class="node-icon">🏷</span>
+          <span class="node-name">SSN</span>
+          <span class="node-type-badge">Term</span>
+        </div>
+      <!-- Node: Marketing -->
+      <div class="tree-node" style="--depth:0;">
+        <span class="caret">▶</span>
+        <span class="node-icon">📁</span>
+        <span class="node-name">Marketing</span>
+        <span class="node-type-badge">Term Group</span>
+      </div>
+      <!-- Standalone term -->
+      <div class="tree-node" style="--depth:0;">
+        <span class="caret"></span>
+        <span class="node-icon">🏷</span>
+        <span class="node-name">Confidential</span>
+        <span class="node-type-badge">Term</span>
+      </div>
+      <div class="tree-node" style="--depth:0;">
+        <span class="caret"></span>
+        <span class="node-icon">🏷</span>
+        <span class="node-name">Internal Use Only</span>
+        <span class="node-type-badge">Term</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     STATE 2 – Search text entered → Dropdown with results
+     ================================================================ -->
+<div class="card" id="state-search">
+  <div class="card-title">State B — Search text entered ("PII") → Search dropdown shown</div>
+
+  <div class="form-section">
+    <div class="form-label">Glossary Terms / Term Groups <span class="new-badge">NEW</span></div>
+    <p class="form-description">
+      The policy will apply to resources with the chosen glossary terms or any term under the chosen glossary
+      term groups. If <strong>none</strong> are selected, the policy will not account for glossary terms.
+    </p>
+
+    <div class="ant-select">
+      <div class="ant-select-selector" style="border-color:#1677ff;box-shadow:0 0 0 2px rgba(22,119,255,.2);">
+        <span style="font-size:13px;padding:0 4px;color:#262626;">PII</span>
+        <span class="ant-select-suffix">🔍</span>
+      </div>
+    </div>
+
+    <!-- Search results dropdown -->
+    <div class="ant-select-dropdown">
+      <div class="dropdown-item">
+        <span class="item-icon">📁</span>
+        PII
+        <span class="item-type">Term Group</span>
+      </div>
+      <div class="dropdown-item">
+        <span class="item-icon">🏷</span>
+        Email Address
+        <span class="item-type">Term</span>
+      </div>
+      <div class="dropdown-item">
+        <span class="item-icon">🏷</span>
+        Phone Number
+        <span class="item-type">Term</span>
+      </div>
+      <div class="dropdown-item">
+        <span class="item-icon">🏷</span>
+        SSN
+        <span class="item-type">Term</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     STATE 3 – Terms selected → Tags shown
+     ================================================================ -->
+<div class="card" id="state-selected">
+  <div class="card-title">State C — Selected terms displayed as tags</div>
+
+  <div class="form-section">
+    <div class="form-label">Glossary Terms / Term Groups <span class="new-badge">NEW</span></div>
+    <p class="form-description">
+      The policy will apply to resources with the chosen glossary terms or any term under the chosen glossary
+      term groups. If <strong>none</strong> are selected, the policy will not account for glossary terms.
+    </p>
+
+    <div class="ant-select">
+      <div class="ant-select-selector">
+        <!-- Selected: a term group -->
+        <span class="ant-tag glossary-node">
+          <span class="tag-icon">📁</span>
+          PII
+          <span class="close-btn">✕</span>
+        </span>
+        <!-- Selected: individual terms -->
+        <span class="ant-tag glossary-term">
+          <span class="tag-icon">🏷</span>
+          Confidential
+          <span class="close-btn">✕</span>
+        </span>
+        <span class="ant-tag glossary-term">
+          <span class="tag-icon">🏷</span>
+          Internal Use Only
+          <span class="close-btn">✕</span>
+        </span>
+        <span class="ant-select-suffix">▾</span>
+      </div>
+    </div>
+
+    <!-- Description of tag colors -->
+    <div style="margin-top:10px;display:flex;gap:12px;font-size:12px;color:#595959;">
+      <span style="display:flex;align-items:center;gap:4px;">
+        <span class="ant-tag glossary-node" style="margin:0;">📁 Term Group</span>
+        orange/amber style
+      </span>
+      <span style="display:flex;align-items:center;gap:4px;">
+        <span class="ant-tag glossary-term" style="margin:0;">🏷 Term</span>
+        blue style
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     Component Hierarchy callout
+     ================================================================ -->
+<div class="card" id="hierarchy">
+  <div class="card-title">Component Hierarchy</div>
+  <pre style="font-size:12px;line-height:1.7;color:#262626;background:#fafafa;padding:14px;border-radius:6px;border:1px solid #f0f0f0;overflow-x:auto;">
+PolicyPrivilegeForm
+└── GlossarySelector  (NEW — GlossarySelector.tsx)
+    ├── &lt;Typography.Paragraph&gt;    help text
+    ├── ClickOutside               dismiss browser on outside click
+    │   ├── &lt;Select mode="multiple"&gt;
+    │   │   ├── tagRender          → &lt;Tag&gt; per selected entity
+    │   │   └── &lt;Select.Option&gt;   → per search result
+    │   └── StyledBrowserWrapper   (hidden unless focused + no search text)
+    │       └── GlossaryBrowser    isSelecting
+    │           ├── selectTerm     → calls onSelectGlossaryEntity
+    │           └── selectNode     → calls onSelectGlossaryEntity
+
+State machine:
+  focused=false                      → browser hidden,  dropdown hidden
+  focused=true  + searchText=""      → browser VISIBLE, dropdown hidden
+  focused=true  + searchText.len&gt;0   → browser hidden,  dropdown VISIBLE
+  deselect tag                       → removes URN from ResourceFilter.criteria[GLOSSARY]
+  select (dropdown or browser)       → appends URN+entity to ResourceFilter.criteria[GLOSSARY]
+  </pre>
+</div>
+
+</body>
+</html>
