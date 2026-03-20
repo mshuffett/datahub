@@ -4,22 +4,33 @@ import { BrowserRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import GlossarySelector from '@app/permissions/policy/GlossarySelector';
+import * as policyUtils from '@app/permissions/policy/policyUtils';
 import { render } from '@utils/test-utils/customRender';
 
 import { EntityType, PolicyMatchCondition, ResourceFilter } from '@types';
 
-// Mock the GraphQL lazy query
+// Mock the GraphQL lazy query — spread actual module to keep all fragment doc exports
 const mockSearchGlossaryEntities = vi.fn();
-vi.mock('@graphql/search.generated', () => ({
-    useGetSearchResultsForMultipleLazyQuery: () => [
-        mockSearchGlossaryEntities,
-        { data: undefined },
-    ],
-}));
+vi.mock('@graphql/search.generated', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@graphql/search.generated')>();
+    return {
+        ...actual,
+        useGetSearchResultsForMultipleLazyQuery: () => [
+            mockSearchGlossaryEntities,
+            { data: undefined },
+        ],
+    };
+});
 
 // Mock GlossaryBrowser — it has deep GraphQL dependencies
 vi.mock('@app/glossaryV2/GlossaryBrowser/GlossaryBrowser', () => ({
-    default: ({ selectTerm, selectNode }: { selectTerm: (urn: string, name: string) => void; selectNode: (urn: string, name: string) => void }) => (
+    default: ({
+        selectTerm,
+        selectNode,
+    }: {
+        selectTerm: (urn: string, name: string) => void;
+        selectNode: (urn: string, name: string) => void;
+    }) => (
         <div data-testid="glossary-browser">
             <button
                 type="button"
@@ -52,14 +63,16 @@ vi.mock('@app/shared/tags/AddTagsTermsModal', () => ({
 }));
 
 // Mock entity registry
-const mockGetDisplayName = vi.fn().mockImplementation((_type, entity) => entity?.properties?.name || entity?.urn || 'Unknown');
+const mockGetDisplayName = vi
+    .fn()
+    .mockImplementation((_type, entity) => entity?.properties?.name || entity?.urn || 'Unknown');
 vi.mock('@app/useEntityRegistry', () => ({
     useEntityRegistry: () => ({
         getDisplayName: mockGetDisplayName,
     }),
 }));
 
-// Mock policyUtils
+// Mock policyUtils — spying on the module import so we can override per-test
 vi.mock('@app/permissions/policy/policyUtils', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@app/permissions/policy/policyUtils')>();
     return {
@@ -101,6 +114,13 @@ describe('GlossarySelector', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // Reset policyUtils mocks to sensible defaults before each test
+        vi.mocked(policyUtils.getFieldValues).mockReturnValue([]);
+        vi.mocked(policyUtils.setFieldValues).mockReturnValue({ criteria: [] });
+        vi.mocked(policyUtils.createCriterionValueWithEntity).mockImplementation((urn, entity) => ({
+            value: urn,
+            entity,
+        }));
     });
 
     it('renders without crashing', () => {
@@ -219,7 +239,7 @@ describe('GlossarySelector', () => {
         expect(mockSetResources).toHaveBeenCalled();
     });
 
-    it('uses short query wildcard when search text is 2 characters or fewer', async () => {
+    it('uses wildcard query when search text is 2 characters or fewer', async () => {
         render(
             <BrowserRouter>
                 <GlossarySelector resources={emptyResources} setResources={mockSetResources} />
@@ -240,5 +260,23 @@ describe('GlossarySelector', () => {
                 }),
             );
         });
+    });
+
+    it('renders existing glossary terms when resources contain GLOSSARY criteria', () => {
+        vi.mocked(policyUtils.getFieldValues).mockImplementation((_, field) => {
+            if (field === 'GLOSSARY') {
+                return [{ value: 'urn:li:glossaryTerm:existing', entity: null }];
+            }
+            return [];
+        });
+
+        render(
+            <BrowserRouter>
+                <GlossarySelector resources={resourcesWithGlossaryTerm} setResources={mockSetResources} />
+            </BrowserRouter>,
+        );
+
+        // Component renders without error with pre-existing terms
+        expect(screen.getByRole('combobox')).toBeInTheDocument();
     });
 });
